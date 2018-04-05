@@ -378,7 +378,7 @@ if __name__ == '__main__':
 
     for _, n_h in enumerate(hidden_layer_sizes):
         # 迭代次数
-        parameters = nn_model(X, Y, n_h, num_iterations=10000, print_cost=True, learning_rate=0.25)
+        parameters = nn_model(X, Y, n_h, num_iterations=10000, print_cost=True, learning_rate=0.2)
         # print('训练后的参数为' + str(parameters))
         # 计算训练集的拟合度
         predictions = predict(parameters, X)

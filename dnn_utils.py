@@ -1,5 +1,6 @@
 import numpy as np
 
+
 def sigmoid(Z):
     """
     Implements the sigmoid activation in numpy
@@ -16,6 +17,7 @@ def sigmoid(Z):
     cache = Z
 
     return A, cache
+
 
 def relu(Z):
     """
@@ -35,6 +37,7 @@ def relu(Z):
 
     cache = Z
     return A, cache
+
 
 def relu_backward(dA, cache):
     """
@@ -57,6 +60,7 @@ def relu_backward(dA, cache):
     assert (dZ.shape == Z.shape)
 
     return dZ
+
 
 def sigmoid_backward(dA, cache):
     """
