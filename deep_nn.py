@@ -94,7 +94,7 @@ def forward_propagation(X, parameters):
     Z2 = np.dot(W2, A1) + b2
     A2 = sigmoid(Z2)
 
-    assert (A2.shape == (1, X.shape[1]))
+    assert (A2.shape[1] == X.shape[1])
 
     cache = {"Z1": Z1,
              "A1": A1,
@@ -257,7 +257,7 @@ def nn_model(X, Y, n_h, num_iterations=10000, print_cost=False, learning_rate=0.
         parameters = update_parameters(parameters, grads, learning_rate)
 
         # Print the cost every 1000 iterations
-        if (print_cost and i % 1000 == 0) or i == num_iterations - 1:
+        if (print_cost and i % 100 == 0) or i == num_iterations - 1:
             print("第 %i 次迭代后的误差为: %f" % (i, cost))
 
     return parameters
@@ -274,12 +274,19 @@ def predict(parameters: object, X: object) -> object:
     X -- input data of size (n_x, m)
 
     Returns
-    predictions -- vector of predictions of our model (red: 0 / blue: 1)
+    predictions -- vector of predictions of our model
     """
 
     # Computes probabilities using forward propagation, and classifies to 0/1 using 0.5 as the threshold.
     A2, _ = forward_propagation(X, parameters)
-    predictions = np.asarray(list(map(lambda x: 1 if x > 0.5 else 0, np.squeeze(np.asarray(A2))))).reshape(1, -1)
+    if A2.shape[1] > 1:
+        temp = np.zeros((A2.shape[0],A2.shape[1]))
+        predictions = np.argmax(A2, axis=0)
+        for i in range(predictions.size):
+            temp[predictions[i], i] = 1
+        predictions = np.copy(temp)
+    else:
+        predictions = np.asarray(list(map(lambda x: 1 if x > 0.5 else 0, np.squeeze(np.asarray(A2))))).reshape(1, -1)
 
     return predictions
 
@@ -288,13 +295,14 @@ if __name__ == '__main__':
     # data1 = data[0:6000]
     # label1 = label[0:6000]
     # label1 = label1.reshape(len(label1), 1)
-    demo_size = 10000
+    demo_size = 20000
     label_flag = 0
     X = data[0:demo_size].T
     # X = X[0:2, :]
     Y = label[0:demo_size].reshape(demo_size, 1)
     Y = nn.adjustLabels(Y).T
-    Y = Y[label_flag, :].reshape(1, demo_size)
+    # Y 的 shape 是(10,demo_size)
+    # Y = Y[label_flag, :].reshape(1, demo_size)
 
     # X, Y = load_planar_dataset()
     print(X)
@@ -307,7 +315,7 @@ if __name__ == '__main__':
     # 检查数据的维度
     shape_X = X.shape
     shape_Y = Y.shape
-    m = np.size(Y)  # 训练集的大小
+    m = Y.shape[1]  # 训练集的大小
 
     print('矩阵 X 的大小是: ' + str(shape_X))
     print('矩阵 Y 的大小是: ' + str(shape_Y))
@@ -326,6 +334,7 @@ if __name__ == '__main__':
     print("W2 = " + str(parameters["W2"]))
     print("b2 = " + str(parameters["b2"]))
 
+    # 向前传播，预测
     A2, cache = forward_propagation(X, parameters)
 
     print('Z1 ' + str(cache['Z1'].shape))
@@ -336,7 +345,7 @@ if __name__ == '__main__':
     # 计算误差
     print("cost = " + str(compute_cost(A2, Y, parameters)))
 
-    # 计算梯度
+    # 先后传播，计算梯度
     grads = backward_propagation(parameters, cache, X, Y)
     print("dW1 = " + str(grads["dW1"]))
     print("db1 = " + str(grads["db1"]))
@@ -357,29 +366,35 @@ if __name__ == '__main__':
 
     # 测试不同参数的准确度
     hidden_layer_sizes = [1, 2, 3, 4, 5, 10, 20, 50]
+    hidden_layer_sizes = [15]
 
     # 预测测试集的准确度
-    test_right = 60000
+    test_right = 30000
     test_size = test_right - demo_size
     X_test = data[demo_size:test_right].T
     Y_test = label[demo_size:test_right].reshape(test_size, 1)
     Y_test = nn.adjustLabels(Y_test).T
-    Y_test = Y_test[label_flag, :].reshape(1, test_size)
+    # Y_test = Y_test[label_flag, :].reshape(1, test_size)
 
-    for i, n_h in enumerate(hidden_layer_sizes):
-        print(n_h)
+    for _, n_h in enumerate(hidden_layer_sizes):
         # 迭代次数
-        parameters = nn_model(X, Y, n_h, num_iterations=10000, print_cost=False, learning_rate=0.012)
+        parameters = nn_model(X, Y, n_h, num_iterations=10000, print_cost=True, learning_rate=0.25)
         # print('训练后的参数为' + str(parameters))
         # 计算训练集的拟合度
         predictions = predict(parameters, X)
-        accuracy = float((np.dot(Y, predictions.T) + np.dot(1 - Y, 1 - predictions.T)) / float(Y.size) * 100)
-        print("{}个隐层单元的训练集的拟合度为: {} %".format(n_h, accuracy))
         prediction_test = predict(parameters, X_test)
-        print('测试集的准确度为: %.4f' % float(
-            (np.dot(Y_test, prediction_test.T) + np.dot(1 - Y_test, 1 - prediction_test.T)) / float(
-                Y_test.size) * 100) + '%')
-        # print("Accuracy for {} hidden units: {} %".format(n_h, accuracy))
+        if n_y > 1:
+            temp = np.dot(Y.T, predictions)
+            correction_num = sum(temp[i][i] for i in range(Y.shape[1]))
+            accuracy = float(correction_num) / float(Y.shape[1]) * 100
+            temp_test = np.dot(Y_test.T, prediction_test)
+            correction_num_test = sum(temp_test[i][i] for i in range(Y_test.shape[1]))
+            accuracy_test = float(correction_num_test) / float(Y_test.shape[1]) * 100
+        else:
+            accuracy = float((np.dot(Y, predictions.T) + np.dot(1 - Y, 1 - predictions.T)) / float(Y.size) * 100)
+            accuracy_test = float((np.dot(Y_test, prediction_test.T) + np.dot(1 - Y_test, 1 - prediction_test.T)) / float(Y_test.size) * 100)
+        print("{}个隐层单元的训练集的拟合度为: {} %".format(n_h, accuracy))
+        print('测试集的准确度为: %.4f' % accuracy_test)
 
 
     # Plot the decision boundary

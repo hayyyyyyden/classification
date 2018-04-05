@@ -197,7 +197,6 @@ def bp(Thetas, a, y, theLambda):
             d[l] = a[l] - y.T
         else:
             # 忽略偏置
-
             d[l] = np.multiply(np.dot(Thetas[l][:,1:].T,d[l + 1]), sigmoidDerivative(a[l][1:, :]))
     for l in layers[0:layerNum - 1]:
         delta[l] = np.dot(d[l + 1], a[l].T)
