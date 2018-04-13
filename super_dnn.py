@@ -621,13 +621,40 @@ def predict(parameters: object, X: object) -> object:
     return predictions
 
 
+def min_max_normalization(x):
+    min_x = np.min(x).reshape(1, 1)
+    max_x = np.max(x).reshape(1, 1)
+    return (x-min_x)/(max_x-min_x)
+
+
+def normalization(x):
+    min_x = np.min(x).reshape(-1, 1)
+    max_x = np.max(x).reshape(-1, 1)
+    mean_x = np.mean(x).reshape(-1, 1)
+    return (x - mean_x) / (max_x - min_x)
+
+
+def gaussian_normalization(x):
+    mean_x = np.mean(x).reshape(-1, 1)
+    sigma = np.std(x, axis=1, ddof=1).reshape(-1, 1)
+    return (x - mean_x) / sigma
+
+
+def z_score(x):
+    return (x - np.mean(x)) / np.std(x, ddof=1)
+
+
 if __name__ == '__main__':
-    demo_size = 20000
+    demo_size = 50000
     label_flag = 0
     X = data[0:demo_size].T
     Y = label[0:demo_size].reshape(demo_size, 1)
     Y = nn.adjustLabels(Y).T
     # Y = Y[label_flag, :].reshape(1, demo_size)
+
+    # X = min_max_normalization(X)
+    # X = normalization(X)
+    # X = gaussian_normalization(X)
 
     print(X)
     print(X.shape)
@@ -644,39 +671,43 @@ if __name__ == '__main__':
     print('矩阵 Y 的大小是: ' + str(shape_Y))
     print('我有 m = %d 个训练样本!' % m)
 
-    # 测试不同参数的准确度
+    # 测试不同参数的准确度 Deprecated
     hidden_layer_sizes = [3, 5, 8, 10, 12, 15, 20, 30, 50]
+    hidden_layer_sizes = [60]
 
-    # 预测测试集的准确度
-    test_right = 30000
+    # 开发集，应该叫 Dev
+    test_right = 55000
     test_size = test_right - demo_size
     X_test = data[demo_size:test_right].T
+
+    # 给输入数据进行正则化表现很差
+    # X_test = min_max_normalization(X_test)
+    # X_test = normalization(X_test)
+    # X_test = gaussian_normalization(X_test)
+
     Y_test = label[demo_size:test_right].reshape(test_size, 1)
     Y_test = nn.adjustLabels(Y_test).T
     # Y_test = Y_test[label_flag, :].reshape(1, test_size)
-
+    layers_dims = [n_x, 15, 15, 15, n_y]
     max_acc = []
-    for _, n_h in enumerate(hidden_layer_sizes):
-        # 迭代次数
-        parameters = L_layer_model(X, Y, layers_dims=[n_x, n_h, n_h, n_h, n_y], learning_rate=0.008, num_iterations=2000, print_cost=True)
-        # print('训练后的参数为' + str(parameters))
-        # 计算训练集的拟合度
-        predictions = predict(parameters, X)
-        prediction_test = predict(parameters, X_test)
-        if n_y > 1:
-            temp = np.dot(Y.T, predictions)
-            correction_num = sum(temp[i][i] for i in range(Y.shape[1]))
-            accuracy = float(correction_num) / float(Y.shape[1]) * 100
-            temp_test = np.dot(Y_test.T, prediction_test)
-            correction_num_test = sum(temp_test[i][i] for i in range(Y_test.shape[1]))
-            accuracy_test = float(correction_num_test) / float(Y_test.shape[1]) * 100
-        else:
-            accuracy = float((np.dot(Y, predictions.T) + np.dot(1 - Y, 1 - predictions.T)) / float(Y.size) * 100)
-            accuracy_test = float((np.dot(Y_test, prediction_test.T) + np.dot(1 - Y_test, 1 - prediction_test.T)) / float(Y_test.size) * 100)
-        max_acc.append((accuracy+accuracy_test, n_h))
-        print("{}个隐层单元的训练集的拟合度为: {} %".format(n_h, accuracy))
-        print('测试集的准确度为: %.4f ' % accuracy_test + '%')
-    print(max_acc)
+    # 迭代次数
+    parameters = L_layer_model(X, Y, layers_dims=layers_dims, learning_rate=0.01, num_iterations=1200, print_cost=True)
+    # print('训练后的参数为' + str(parameters))
+    # 计算训练集的拟合度
+    predictions = predict(parameters, X)
+    prediction_test = predict(parameters, X_test)
+    if n_y > 1:
+        temp = np.dot(Y.T, predictions)
+        correction_num = sum(temp[i][i] for i in range(Y.shape[1]))
+        accuracy = float(correction_num) / float(Y.shape[1]) * 100
+        temp_test = np.dot(Y_test.T, prediction_test)
+        correction_num_test = sum(temp_test[i][i] for i in range(Y_test.shape[1]))
+        accuracy_test = float(correction_num_test) / float(Y_test.shape[1]) * 100
+    else:
+        accuracy = float((np.dot(Y, predictions.T) + np.dot(1 - Y, 1 - predictions.T)) / float(Y.size) * 100)
+        accuracy_test = float((np.dot(Y_test, prediction_test.T) + np.dot(1 - Y_test, 1 - prediction_test.T)) / float(Y_test.size) * 100)
+    print("{}个隐层单元的训练集的拟合度为: {} %".format(str(layers_dims), accuracy))
+    print('测试集的准确度为: %.4f ' % accuracy_test + '%')
 
 
 
