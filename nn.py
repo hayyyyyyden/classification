@@ -50,7 +50,7 @@ def computeCost(Thetas, y, theLambda, X=None, a=None):
     if a is None:
         a = fp(Thetas, X)
     error = -np.sum(np.multiply(y.T,np.log(a[-1]))+np.multiply((1-y).T, np.log(1-a[-1])))
-    # 正规化参数
+    # 正规化参数 这里没问题吗？不应该是平方的和吗？？
     reg = -np.sum([np.sum(Theta[:, 1:]) for Theta in Thetas])
     return (1.0 / m) * error + (1.0 / (2 * m)) * theLambda * reg
 

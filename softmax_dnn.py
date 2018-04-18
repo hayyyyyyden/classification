@@ -57,6 +57,24 @@ def sigmoid(Z):
     return A, cache
 
 
+def softmax(Z):
+    # 据说这样可以解决 overflow 的 bug，解决了个几把，垃圾
+    # e_x = np.exp(Z - np.max(Z))
+    # A = e_x / e_x.sum()
+    Z = np.clip(Z, -709, 709)
+    T = np.exp(Z)
+    A = T/np.sum(T, axis=0)
+    cache = Z
+    return A, cache
+
+
+def softmax_backward(dA, cache):
+    # TODO: 什么鬼？为什么这里两步合成一步啊？
+    dZ = dA
+    return dZ
+
+
+
 def relu_backward(dA, cache):
     """
     Implement the backward propagation for a single RELU unit.
@@ -195,7 +213,9 @@ def linear_activation_forward(A_prev, W, b, activation, keep_prob=1.0):
     if activation == "sigmoid":
         Z, linear_cache = linear_forward(A_prev, W, b)
         A, activation_cache = sigmoid(Z)
-
+    elif activation == "softmax":
+        Z, linear_cache = linear_forward(A_prev, W, b)
+        A, activation_cache = softmax(Z)
     elif activation == "relu":
         Z, linear_cache = linear_forward(A_prev, W, b)
         A, activation_cache = relu(Z)
@@ -237,7 +257,7 @@ def L_model_forward(X, parameters, keep_prob=1.0):
 
     # Implement LINEAR -> SIGMOID. Add "cache" to the "caches" list.
     ### START CODE HERE ### (≈ 2 lines of code)
-    AL, cache = linear_activation_forward(A, parameters['W' + str(L)], parameters['b' + str(L)], activation="sigmoid")
+    AL, cache = linear_activation_forward(A, parameters['W' + str(L)], parameters['b' + str(L)], activation="softmax")
     caches.append(cache)
     ### END CODE HERE ###
 
@@ -292,36 +312,61 @@ def L_model_backward(AL, Y, caches, keep_prob=1.0):
     return grads
 
 
-def compute_cost(AL, Y):
+def L_model_backward_softmax(AL, Y, caches, keep_prob=1.0):
     """
-    Implement the cost function defined by equation (7).
+    Implement the backward propagation for the [LINEAR->RELU] * (L-1) -> LINEAR -> SIGMOID group
 
     Arguments:
-    AL -- probability vector corresponding to your label predictions, shape (1, number of examples)
-    Y -- true "label" vector (for example: containing 0 if non-cat, 1 if cat), shape (1, number of examples)
+    AL -- probability vector, output of the forward propagation (L_model_forward())
+    Y -- true "label" vector (containing 0 if non-cat, 1 if cat)
+    caches -- list of caches containing:
+                every cache of linear_activation_forward() with "relu" (it's caches[l], for l in range(L-1) i.e l = 0...L-2)
+                the cache of linear_activation_forward() with "sigmoid" (it's caches[L-1])
 
     Returns:
-    cost -- cross-entropy cost
+    grads -- A dictionary with the gradients
+             grads["dA" + str(l)] = ...
+             grads["dW" + str(l)] = ...
+             grads["db" + str(l)] = ...
     """
+    grads = {}
+    L = len(caches)  # the number of layers
+    m = AL.shape[1]
+    Y = Y.reshape(AL.shape)  # after this line, Y is the same shape as AL
 
+
+    # Initializing the backpropagation with softmax
+    dAL = AL - Y  # 不需要除以 m 吗？为什么？
+
+    # Lth layer (SIGMOID -> LINEAR) gradients. Inputs: "dAL, current_cache". Outputs: "grads["dAL-1"], grads["dWL"], grads["dbL"]
+    current_cache = caches[L - 1]
+    grads["dA" + str(L - 1)], grads["dW" + str(L)], grads["db" + str(L)] = linear_activation_backward(dAL,
+                                                                                                      current_cache,
+                                                                                                      "softmax")
+
+    # Loop from l=L-2 to l=0
+    for l in reversed(range(L - 1)):
+        # lth layer: (RELU -> LINEAR) gradients.
+        # Inputs: "grads["dA" + str(l + 1)], current_cache". Outputs: "grads["dA" + str(l)] , grads["dW" + str(l + 1)] , grads["db" + str(l + 1)]
+        ### START CODE HERE ### (approx. 5 lines)
+        current_cache = caches[l]
+        dA_prev_temp, dW_temp, db_temp = linear_activation_backward(grads["dA" + str(l + 1)], current_cache, "relu", keep_prob)
+        grads["dA" + str(l)] = dA_prev_temp
+        grads["dW" + str(l + 1)] = dW_temp
+        grads["db" + str(l + 1)] = db_temp
+        ### END CODE HERE ###
+
+    return grads
+
+
+def compute_cost_softmax(AL, Y):
     m = Y.shape[1]
-
     # Compute loss from aL and y.
     cc1 = np.log(AL)
-    cc2 = cc1*Y
-    # print('------')
-    # print('AL is')
-    # print(AL)
-    cc3 = np.log(1 - AL)
-    cc4 = (1-Y)*cc3
-    logprobs = cc2 + cc4
-    # logprobs = np.multiply(np.log(AL), Y) + np.multiply((1 - Y), np.log(1 - AL))
-
+    logprobs = np.multiply(cc1, Y)
     cost = (-1 / m) * np.nansum(logprobs)
-
-    cost = np.squeeze(cost)  # To make sure your cost's shape is what we expect (e.g. this turns [[17]] into 17).
+    cost = np.squeeze(cost)  # To make sure the shape is what we expect
     assert (cost.shape == ())
-
     return cost
 
 
@@ -343,11 +388,9 @@ def linear_backward(dZ, cache):
 
     m = A_prev.shape[1]
 
-    ### START CODE HERE ### (≈ 3 lines of code)
     dW = (1.0 / m) * np.dot(dZ, A_prev.T)
     db = (1.0 / m) * np.sum(dZ, axis=1, keepdims=True)
     dA_prev = np.dot(W.T, dZ)
-    ### END CODE HERE ###
 
     assert (dA_prev.shape == A_prev.shape)
     assert (dW.shape == W.shape)
@@ -373,19 +416,19 @@ def linear_activation_backward(dA, cache, activation, keep_prob=1.0):
     linear_cache, activation_cache = cache
 
     if activation == "relu":
-        ### START CODE HERE ### (≈ 2 lines of code)
         D = activation_cache[1]
         dA = dA * D
         dA = dA / keep_prob
         dZ = relu_backward(dA=dA, cache=activation_cache)
         dA_prev, dW, db = linear_backward(cache=linear_cache, dZ=dZ)
-        ### END CODE HERE ###
+
+    elif activation == "softmax":
+        dZ = softmax_backward(cache=activation_cache, dA=dA)
+        dA_prev, dW, db = linear_backward(cache=linear_cache, dZ=dZ)
 
     elif activation == "sigmoid":
-        ### START CODE HERE ### (≈ 2 lines of code)
         dZ = sigmoid_backward(cache=activation_cache, dA=dA)
         dA_prev, dW, db = linear_backward(cache=linear_cache, dZ=dZ)
-        ### END CODE HERE ###
 
     return dA_prev, dW, db
 
@@ -444,11 +487,11 @@ def L_layer_model(X, Y, layers_dims, learning_rate=0.0075, num_iterations=3000, 
         # Forward propagation: [LINEAR -> RELU]*(L-1) -> LINEAR -> SIGMOID.
         AL, caches = L_model_forward(X, parameters, keep_prob)
 
-        # Compute cost.
-        cost = compute_cost(AL, Y)
+        # Compute cost with softmax.
+        cost = compute_cost_softmax(AL, Y)
 
-        # Backward propagation.
-        grads = L_model_backward(AL, Y, caches, keep_prob)
+        # Backward propagation with softmax.
+        grads = L_model_backward_softmax(AL, Y, caches, keep_prob)
 
         # Update parameters.
         parameters = update_parameters(parameters, grads, learning_rate)
@@ -456,7 +499,7 @@ def L_layer_model(X, Y, layers_dims, learning_rate=0.0075, num_iterations=3000, 
         # Print the cost every 100 training example
         if print_cost and (i % 10 == 0 or i == num_iterations-1):
             print("Cost after iteration {}: {}".format(i, cost))
-        if print_cost and i > 0 and (i % 1 == 0 or i == num_iterations-1):
+        if print_cost and i > 100 and (i % 1 == 0 or i == num_iterations-1):
             costs.append(cost)
 
     # plot the cost
@@ -567,11 +610,10 @@ if __name__ == '__main__':
     Y_test = nn.adjustLabels(Y_test).T
 
     # 配置超参（各层节点数，迭代次数，学习速率）
-    # layers_dims = [n_x, 20, 10, n_y]
-    layers_dims = [n_x, 240, 50, 40, n_y]
-    num_iterations = 3000
-    learning_rate = 0.12
-    keep_prob = 0.5
+    layers_dims = [n_x, 240, 150, 80, n_y]
+    num_iterations = 5000
+    learning_rate = 0.02
+    keep_prob = 1.0
 
     # 训练
     parameters = L_layer_model(X, Y, layers_dims, learning_rate, num_iterations, keep_prob, print_cost=True)
