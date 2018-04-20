@@ -6,10 +6,12 @@ def sigmoid(z):
     """
     return 1 / (1 + np.exp(-z))
 
+
 def sigmoidDerivative(a):
     """sigmoid求导
     """
     return np.multiply(a, (1-a))
+
 
 def initThetas(hiddenNum, unitNum, inputSize, classNum, epsilon):
     """初始化权值矩阵
@@ -35,6 +37,7 @@ def initThetas(hiddenNum, unitNum, inputSize, classNum, epsilon):
         Thetas.append(Theta)
     return Thetas
 
+
 def computeCost(Thetas, y, theLambda, X=None, a=None):
     """计算代价
 
@@ -53,6 +56,7 @@ def computeCost(Thetas, y, theLambda, X=None, a=None):
     # 正规化参数 这里没问题吗？不应该是平方的和吗？？
     reg = -np.sum([np.sum(Theta[:, 1:]) for Theta in Thetas])
     return (1.0 / m) * error + (1.0 / (2 * m)) * theLambda * reg
+
 
 def gradientCheck(Thetas,X,y,theLambda):
     """梯度校验
@@ -92,6 +96,7 @@ def gradientCheck(Thetas,X,y,theLambda):
     else:
         return False
 
+
 def adjustLabels(y):
     """校正分类标签
 
@@ -117,6 +122,7 @@ def adjustLabels(y):
         return yAdjusted
     return y
 
+
 def unroll(matrixes):
     """参数展开
 
@@ -130,6 +136,7 @@ def unroll(matrixes):
         vector = matrix.reshape(1, -1)[0]
         vec = np.concatenate((vec, vector))
     return vec
+
 
 def roll(vector, shapes):
     """参数恢复
@@ -148,6 +155,7 @@ def roll(vector, shapes):
         begin = end
         matrixes.append(matrix)
     return matrixes
+
 
 def fp(Thetas, X):
     """前向反馈过程
@@ -173,6 +181,7 @@ def fp(Thetas, X):
         if l != layerNum - 1:
             a[l] = np.concatenate((np.ones((1, a[l].shape[1])), a[l]))
     return a
+
 
 def bp(Thetas, a, y, theLambda):
     """反向传播过程
@@ -210,6 +219,7 @@ def bp(Thetas, a, y, theLambda):
                                    theLambda * Theta[:, 1:])
     return D
 
+
 def updateThetas(m, Thetas, D, alpha, theLambda):
     """更新权值
 
@@ -225,6 +235,7 @@ def updateThetas(m, Thetas, D, alpha, theLambda):
     for l in range(len(Thetas)):
         Thetas[l] = Thetas[l] - alpha * D[l]
     return Thetas
+
 
 def gradientDescent(Thetas, X, y, alpha, theLambda):
     """梯度下降
@@ -251,6 +262,7 @@ def gradientDescent(Thetas, X, y, alpha, theLambda):
     if np.isnan(J):
         J = np.inf
     return J, Thetas
+
 
 def train(X, y, Thetas=None, hiddenNum=0, unitNum=5, epsilon=1, alpha=1, theLambda=0, precision=0.01, maxIters=50):
     """网络训练
@@ -310,6 +322,7 @@ def train(X, y, Thetas=None, hiddenNum=0, unitNum=5, epsilon=1, alpha=1, theLamb
             'iters': 0,
             'success': False
         }
+
 
 def predict(X, Thetas):
     """预测函数

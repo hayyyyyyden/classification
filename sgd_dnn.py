@@ -186,7 +186,6 @@ def linear_forward(A, W, b):
     ### START CODE HERE ### (≈ 1 line of code)
     Z = np.dot(W, A) + b
     ### END CODE HERE ###
-
     assert (Z.shape == (W.shape[0], A.shape[1]))
     cache = (A, W, b)
 
@@ -418,18 +417,187 @@ def update_parameters(parameters, grads, learning_rate):
     return parameters
 
 
-def L_layer_model(X, Y, layers_dims, learning_rate=0.0075, num_iterations=3000, keep_prob=1.0, lambd=50,
-                  print_cost=False):
+# initialize_velocity
+
+def initialize_velocity(parameters):
     """
-    Implements a L-layer neural network: [LINEAR->RELU]*(L-1)->LINEAR->SIGMOID.
+    Initializes the velocity as a python dictionary with:
+                - keys: "dW1", "db1", ..., "dWL", "dbL"
+                - values: numpy arrays of zeros of the same shape as the corresponding gradients/parameters.
+    Arguments:
+    parameters -- python dictionary containing your parameters.
+                    parameters['W' + str(l)] = Wl
+                    parameters['b' + str(l)] = bl
+
+    Returns:
+    v -- python dictionary containing the current velocity.
+                    v['dW' + str(l)] = velocity of dWl
+                    v['db' + str(l)] = velocity of dbl
+    """
+
+    L = len(parameters) // 2  # number of layers in the neural networks
+    v = {}
+
+    # Initialize velocity
+    for l in range(L):
+        v["dW" + str(l + 1)] = np.zeros_like(parameters['W' + str(l + 1)])
+        v["db" + str(l + 1)] = np.zeros_like(parameters['b' + str(l + 1)])
+
+    return v
+
+
+# update_parameters_with_momentum
+
+def update_parameters_with_momentum(parameters, grads, v, beta, learning_rate):
+    """
+    Update parameters using Momentum
 
     Arguments:
-    X -- data, numpy array of shape (number of examples, num_px * num_px * 3)
-    Y -- true "label" vector (containing 0 if cat, 1 if non-cat), of shape (1, number of examples)
-    layers_dims -- list containing the input size and each layer size, of length (number of layers + 1).
-    learning_rate -- learning rate of the gradient descent update rule
-    num_iterations -- number of iterations of the optimization loop
-    print_cost -- if True, it prints the cost every 100 steps
+    parameters -- python dictionary containing your parameters:
+                    parameters['W' + str(l)] = Wl
+                    parameters['b' + str(l)] = bl
+    grads -- python dictionary containing your gradients for each parameters:
+                    grads['dW' + str(l)] = dWl
+                    grads['db' + str(l)] = dbl
+    v -- python dictionary containing the current velocity:
+                    v['dW' + str(l)] = ...
+                    v['db' + str(l)] = ...
+    beta -- the momentum hyperparameter, scalar
+    learning_rate -- the learning rate, scalar
+
+    Returns:
+    parameters -- python dictionary containing your updated parameters
+    v -- python dictionary containing your updated velocities
+    """
+
+    L = len(parameters) // 2  # number of layers in the neural networks
+
+    # Momentum update for each parameter
+    for l in range(L):
+        # compute velocities
+        v["dW" + str(l + 1)] = v["dW" + str(l + 1)] * beta + (1 - beta) * grads['dW' + str(l + 1)]
+        v["db" + str(l + 1)] = v["db" + str(l + 1)] * beta + (1 - beta) * grads['db' + str(l + 1)]
+        # update parameters
+        parameters["W" + str(l + 1)] = parameters["W" + str(l + 1)] - learning_rate * v["dW" + str(l + 1)]
+        parameters["b" + str(l + 1)] = parameters["b" + str(l + 1)] - learning_rate * v["db" + str(l + 1)]
+
+    return parameters, v
+
+
+# initialize_adam
+
+def initialize_adam(parameters):
+    """
+    Initializes v and s as two python dictionaries with:
+                - keys: "dW1", "db1", ..., "dWL", "dbL"
+                - values: numpy arrays of zeros of the same shape as the corresponding gradients/parameters.
+
+    Arguments:
+    parameters -- python dictionary containing your parameters.
+                    parameters["W" + str(l)] = Wl
+                    parameters["b" + str(l)] = bl
+
+    Returns:
+    v -- python dictionary that will contain the exponentially weighted average of the gradient.
+                    v["dW" + str(l)] = ...
+                    v["db" + str(l)] = ...
+    s -- python dictionary that will contain the exponentially weighted average of the squared gradient.
+                    s["dW" + str(l)] = ...
+                    s["db" + str(l)] = ...
+
+    """
+
+    L = len(parameters) // 2  # number of layers in the neural networks
+    v = {}
+    s = {}
+
+    # Initialize v, s. Input: "parameters". Outputs: "v, s".
+    for l in range(L):
+        v["dW" + str(l + 1)] = np.zeros_like(parameters["W" + str(l + 1)])
+        v["db" + str(l + 1)] = np.zeros_like(parameters["b" + str(l + 1)])
+        s["dW" + str(l + 1)] = np.zeros_like(parameters["W" + str(l + 1)])
+        s["db" + str(l + 1)] = np.zeros_like(parameters["b" + str(l + 1)])
+
+    return v, s
+
+
+# update_parameters_with_adam
+
+def update_parameters_with_adam(parameters, grads, v, s, t, learning_rate=0.01,
+                                beta1=0.9, beta2=0.999, epsilon=1e-8):
+    """
+    Update parameters using Adam
+
+    Arguments:
+    parameters -- python dictionary containing your parameters:
+                    parameters['W' + str(l)] = Wl
+                    parameters['b' + str(l)] = bl
+    grads -- python dictionary containing your gradients for each parameters:
+                    grads['dW' + str(l)] = dWl
+                    grads['db' + str(l)] = dbl
+    v -- Adam variable, moving average of the first gradient, python dictionary
+    s -- Adam variable, moving average of the squared gradient, python dictionary
+    learning_rate -- the learning rate, scalar.
+    beta1 -- Exponential decay hyperparameter for the first moment estimates
+    beta2 -- Exponential decay hyperparameter for the second moment estimates
+    epsilon -- hyperparameter preventing division by zero in Adam updates
+
+    Returns:
+    parameters -- python dictionary containing your updated parameters
+    v -- Adam variable, moving average of the first gradient, python dictionary
+    s -- Adam variable, moving average of the squared gradient, python dictionary
+    """
+
+    L = len(parameters) // 2  # number of layers in the neural networks
+    v_corrected = {}  # Initializing first moment estimate, python dictionary
+    s_corrected = {}  # Initializing second moment estimate, python dictionary
+
+    # Perform Adam update on all parameters
+    for l in range(L):
+        # Moving average of the gradients. Inputs: "v, grads, beta1". Output: "v".
+        v["dW" + str(l + 1)] = beta1 * v["dW" + str(l + 1)] + (1 - beta1) * grads['dW' + str(l + 1)]
+        v["db" + str(l + 1)] = beta1 * v["db" + str(l + 1)] + (1 - beta1) * grads['db' + str(l + 1)]
+
+        # Compute bias-corrected first moment estimate. Inputs: "v, beta1, t". Output: "v_corrected".
+        v_corrected["dW" + str(l + 1)] = v["dW" + str(l + 1)] / (1 - beta1 ** t)
+        v_corrected["db" + str(l + 1)] = v["db" + str(l + 1)] / (1 - beta1 ** t)
+
+        # Moving average of the squared gradients. Inputs: "s, grads, beta2". Output: "s".
+        s["dW" + str(l + 1)] = beta2 * s["dW" + str(l + 1)] + (1 - beta2) * np.square(grads['dW' + str(l + 1)])
+        s["db" + str(l + 1)] = beta2 * s["db" + str(l + 1)] + (1 - beta2) * np.square(grads['db' + str(l + 1)])
+
+        # Compute bias-corrected second raw moment estimate. Inputs: "s, beta2, t". Output: "s_corrected".
+        s_corrected["dW" + str(l + 1)] = s["dW" + str(l + 1)] / (1 - beta2 ** t)
+        s_corrected["db" + str(l + 1)] = s["db" + str(l + 1)] / (1 - beta2 ** t)
+
+        # Update parameters. Inputs: "parameters, learning_rate, v_corrected, s_corrected, epsilon". Output: "parameters".
+        parameters["W" + str(l + 1)] = parameters["W" + str(l + 1)] - learning_rate * v_corrected["dW" + str(l + 1)] / (
+                    np.sqrt(s_corrected["dW" + str(l + 1)]) + epsilon)
+        parameters["b" + str(l + 1)] = parameters["b" + str(l + 1)] - learning_rate * v_corrected["db" + str(l + 1)] / (
+                    np.sqrt(s_corrected["db" + str(l + 1)]) + epsilon)
+
+    return parameters, v, s
+
+
+
+def L_layer_model_sgd(X, Y, layers_dims, optimizer, learning_rate=0.0007, mini_batch_size=64,
+                      num_epochs=10000, beta=0.9, beta1=0.9, beta2=0.999, epsilon=1e-8,
+                      keep_prob=1.0, lambd=50, print_cost=False):
+    """
+    L-layer neural network: [LINEAR->RELU]*(L-1)->LINEAR->SOFTMAX.
+
+    Arguments:
+    X -- input data, of shape (2, number of examples)
+    Y -- true "label" vector (1 for blue dot / 0 for red dot), of shape (1, number of examples)
+    layers_dims -- python list, containing the size of each layer
+    learning_rate -- the learning rate, scalar.
+    mini_batch_size -- the size of a mini batch
+    beta -- Momentum hyperparameter
+    beta1 -- Exponential decay hyperparameter for the past gradients estimates
+    beta2 -- Exponential decay hyperparameter for the past squared gradients estimates
+    epsilon -- hyperparameter preventing division by zero in Adam updates
+    num_epochs -- number of epochs
+    print_cost -- True to print the cost every 1000 epochs
 
     Returns:
     parameters -- parameters learnt by the model. They can then be used to predict.
@@ -437,41 +605,104 @@ def L_layer_model(X, Y, layers_dims, learning_rate=0.0075, num_iterations=3000, 
 
     costs = []  # keep track of cost
 
+    t = 0  # initializing the counter required for Adam update
+
     # Parameters initialization.
-    # 正常的随机初始化参数
-    # parameters = initialize_parameters_deep(layers_dims)
     # 使用He 初始化参数
     parameters = initialize_parameters_he(layers_dims)
 
+    # Initialize the optimizer
+    if optimizer == "gd":
+        pass  # no initialization required for gradient descent
+    elif optimizer == "momentum":
+        v = initialize_velocity(parameters)
+    elif optimizer == "adam":
+        v, s = initialize_adam(parameters)
+
+    m = Y.shape[1]
+
     # Loop (gradient descent)
-    for i in range(0, num_iterations):
+    for i in range(num_epochs):
+        # Define the random minibatches.
+        minibatches = random_mini_batches(X, Y, mini_batch_size)
 
-        # Forward propagation: [LINEAR -> RELU]*(L-1) -> LINEAR -> SIGMOID.
-        AL, caches = L_model_forward(X, parameters, keep_prob)
+        for minibatch in minibatches:
+            # Select a minibatch
+            (minibatch_X, minibatch_Y) = minibatch
 
-        # Compute cost with softmax.
-        cost = compute_cost_softmax_with_reg(AL, parameters, lambd, Y)
+            # Forward propagation
+            al, caches = L_model_forward(minibatch_X, parameters, keep_prob)
 
-        # Backward propagation with softmax.
-        grads = L_model_backward_softmax(AL, Y, caches, lambd, keep_prob)
+            # Compute cost with softmax.
+            cost = compute_cost_softmax_with_reg(al, parameters, lambd, minibatch_Y)
 
-        # Update parameters.
-        parameters = update_parameters(parameters, grads, learning_rate)
+            # Backward propagation with softmax.
+            grads = L_model_backward_softmax(al, minibatch_Y, caches, lambd, keep_prob)
 
-        # Print the cost every 100 training example
-        if print_cost and (i % 100 == 0 or i == num_iterations - 1):
-            print("Cost after iteration {}: {}".format(i, cost))
-        if print_cost and i > 0 and (i % 1 == 0 or i == num_iterations - 1):
+            # Update parameters
+            if optimizer == "gd":
+                parameters = update_parameters(parameters, grads, learning_rate)
+            elif optimizer == "momentum":
+                parameters, v = update_parameters_with_momentum(parameters, grads, v, beta, learning_rate)
+            elif optimizer == "adam":
+                t = t + 1  # Adam counter
+                parameters, v, s = update_parameters_with_adam(parameters, grads, v, s,
+                                                               t, learning_rate, beta1, beta2, epsilon)
+        # Print the cost every 1000 epoch
+        if print_cost and i % 10 == 0:
+            print("Cost after epoch %i: %f" % (i, cost))
+        if print_cost and i % 1 == 0:
             costs.append(cost)
-
     # plot the cost
     plt.plot(np.squeeze(costs))
     plt.ylabel('cost')
-    plt.xlabel('iterations (per hundreds)')
+    plt.xlabel('epochs (per 100)')
     plt.title("Learning rate =" + str(learning_rate))
     plt.show(block=True)
 
     return parameters
+
+
+
+# random_mini_batches
+def random_mini_batches(X, Y, mini_batch_size=64):
+    """
+    Creates a list of random minibatches from (X, Y)
+
+    Arguments:
+    X -- input data, of shape (input size, number of examples)
+    Y -- true "label" vector (1 for blue dot / 0 for red dot), of shape (1, number of examples)
+    mini_batch_size -- size of the mini-batches, integer
+
+    Returns:
+    mini_batches -- list of synchronous (mini_batch_X, mini_batch_Y)
+    """
+
+    m = X.shape[1]  # number of training examples
+    mini_batches = []
+
+    # Step 1: Shuffle (X, Y)
+    permutation = list(np.random.permutation(m))
+    shuffled_X = X[:, permutation]
+    shuffled_Y = Y[:, permutation].reshape((-1, m))
+
+    # Step 2: Partition (shuffled_X, shuffled_Y). Minus the end case.
+    num_complete_minibatches = math.floor(
+        m / mini_batch_size)  # number of mini batches of size mini_batch_size in your partitionning
+    for k in range(0, num_complete_minibatches):
+        mini_batch_X = shuffled_X[:, k * mini_batch_size: (k + 1) * mini_batch_size]
+        mini_batch_Y = shuffled_Y[:, k * mini_batch_size: (k + 1) * mini_batch_size]
+        mini_batch = (mini_batch_X, mini_batch_Y)
+        mini_batches.append(mini_batch)
+
+    # Handling the end case (last mini-batch < mini_batch_size)
+    if m % mini_batch_size != 0:
+        mini_batch_X = shuffled_X[:, num_complete_minibatches * mini_batch_size:]
+        mini_batch_Y = shuffled_Y[:, num_complete_minibatches * mini_batch_size:]
+        mini_batch = (mini_batch_X, mini_batch_Y)
+        mini_batches.append(mini_batch)
+
+    return mini_batches
 
 
 def predict(parameters: object, X: object) -> object:
@@ -500,22 +731,6 @@ def predict(parameters: object, X: object) -> object:
     return predictions
 
 
-def min_max_normalization(x):
-    min_x = np.min(x).reshape(1, 1)
-    max_x = np.max(x).reshape(1, 1)
-    return (x - min_x) / (max_x - min_x)
-
-
-def normalization(x, mean_x=None, max_x=None, min_x=None):
-    if mean_x is None and max_x is None and min_x is None:
-        min_x = np.min(x).reshape(-1, 1)
-        max_x = np.max(x).reshape(-1, 1)
-        mean_x = np.mean(x).reshape(-1, 1)
-        return (x - mean_x) / (max_x - min_x), mean_x, max_x, min_x
-    else:
-        return (x - mean_x) / (max_x - min_x)
-
-
 def gaussian_normalization(x, mean_x=None, sigma=None):
     if mean_x is None and sigma is None:
         mean_x = np.mean(x).reshape(-1, 1)
@@ -525,32 +740,30 @@ def gaussian_normalization(x, mean_x=None, sigma=None):
         return (x - mean_x) / sigma
 
 
-def z_score(x):
-    return (x - np.mean(x)) / np.std(x, ddof=1)
-
-
 if __name__ == '__main__':
+    # Shuffle the input data X and Y
     X = data
     m = X.shape[0]
     Y = label.reshape(m, 1)
     permutation = list(np.random.permutation(m))
     X = X[permutation, :]
     Y = Y[permutation, :].reshape(m, 1)
+    print(X)
+    print(X.shape)
+    print(Y.shape)
 
-    demo_size = 10000
+    demo_size = 50000
     label_flag = 0
     X = data[0:demo_size].T
     Y = label[0:demo_size].reshape(demo_size, 1)
     Y = nn.adjustLabels(Y).T
 
-    # 给输入数据进行正则化表现很差
-    # X = min_max_normalization(X)
-    # X, mean_X, max_X, min_X = normalization(X)
-    X, mean_X, sigma = gaussian_normalization(X)
-
     print(X)
     print(X.shape)
     print(Y.shape)
+
+    # 给输入数据进行归一化
+    X, mean_X, sigma = gaussian_normalization(X)
 
     # 检查数据的维度
     shape_X = X.shape
@@ -566,27 +779,36 @@ if __name__ == '__main__':
     print('我有 m = %d 个训练样本!' % m)
 
     # 开发集，应该叫 Dev
-    test_right = 11000
+    test_right = 55000
     test_size = test_right - demo_size
     X_test = data[demo_size:test_right].T
 
-    # 给输入数据进行正则化表现很差
-    # X_test = min_max_normalization(X_test)
-    # X_test = normalization(X_test, mean_X, max_X, min_X)
+    # 给测试数据进行归一化
     X_test = gaussian_normalization(X_test, mean_X, sigma)
 
     Y_test = label[demo_size:test_right].reshape(test_size, 1)
     Y_test = nn.adjustLabels(Y_test).T
 
     # 配置超参（各层节点数，迭代次数，学习速率）
-    layers_dims = [n_x, 30, 20, n_y]
-    num_iterations = 10000
-    learning_rate = 0.05
+    layers_dims = [n_x, 120, 50, 40, n_y]
+    num_epochs = 2000
+    learning_rate = 0.01
+    optimizer = "adam"   # ["momentum", "gd," "adam"]
+    mini_batch_size = 128
+    beta = 0.9
+    beta1 = 0.9
+    beta2 = 0.999
+    epsilon = 1e-8
     keep_prob = 1.0
-    lambd = 0.1 * demo_size
+    # lambd = 0  # no regularization
+    lambd = 0.02 * mini_batch_size
+    print_cost = True
 
     # 训练
-    parameters = L_layer_model(X, Y, layers_dims, learning_rate, num_iterations, keep_prob=keep_prob, lambd=lambd, print_cost=True)
+    parameters = L_layer_model_sgd(X, Y, layers_dims=layers_dims, optimizer=optimizer,
+                                   learning_rate=learning_rate, mini_batch_size=mini_batch_size,
+                                   num_epochs=num_epochs, beta=beta, beta1=beta1, beta2=beta2,
+                                   epsilon=epsilon, keep_prob=keep_prob, lambd=lambd, print_cost=print_cost)
     # print('训练后的参数为' + str(parameters))
 
     # 计算训练集的拟合度
